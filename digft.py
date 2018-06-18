@@ -3,12 +3,13 @@ from log import Log
 import time
 import sys
 import threadpool
+import config
 
 UsdtMin = 38000
 Amount = 100
 
 fcoin = Fcoin()
-fcoin.auth('', '') 
+fcoin.auth(config.get_public_key(), config.get_private_key())
 
 pool = threadpool.ThreadPool(2)
 log = Log()
