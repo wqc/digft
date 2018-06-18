@@ -1,14 +1,19 @@
 from fcoin3 import Fcoin
+from log import Log
 import time
 import sys
+import threadpool
 
 UsdtMin = 38000
 Amount = 100
 
 fcoin = Fcoin()
-fcoin.auth('', '')
+fcoin.auth('', '') 
 
-def getUsdt():
+pool = threadpool.ThreadPool(2)
+log = Log()
+
+def getUsdt(): 
     balance = fcoin.get_balance()
     data = balance['data']
     for item in data:
@@ -35,6 +40,12 @@ def getPendingNumber():
     pendingNum = len(orders['data'])
     return pendingNum
 
+def exchage(type, price, amount):
+    if type == 0:
+        fcoin.sell('ftusdt', price, amount)
+    else:
+        fcoin.buy('ftusdt', price, amount)
+
 def cancelMaximalSellOrder():
     orders = fcoin.list_orders(symbol='ftusdt', states='submitted')
     if orders['status'] == 0:
@@ -55,6 +66,9 @@ def cancelMaximalSellOrder():
 
         print('maxi_price -> ', maxi_price, 'maxi_id -> ', maxi_id)
         print(fcoin.cancel_order(maxi_id))
+        loss = (maxi_price - getLastPrice()) * Amount
+        log.loss(los)
+        print('loooooooooooooooooooooooooooooooooooooooooss -> ', loss)
     return True
 
 def cancelMinimumBuyOrder():
@@ -77,7 +91,14 @@ def cancelMinimumBuyOrder():
 
         print('mini_price -> ', mini_price, 'mini_id -> ', mini_id)
         print(fcoin.cancel_order(mini_id))
+        loss = (getLastPrice() - mini_price) * Amount
+        log.loss(loss)
+        print('loooooooooooooooooooooooooooooooooooooooooss -> ', loss)
     return True
+
+def getLastPrice():
+    ticker = fcoin.get_market_ticker("ftusdt")
+    return ticker["data"]["ticker"][0]
 
 def dealOrder():
     try:
@@ -89,10 +110,10 @@ def dealOrder():
 
     print('existNumber -> ', existNumber)
     print('avaiUsdt -> ', avaiUsdt)
+    print('avaiFt -> ', avaiFt)
     time.sleep(0.2)
 
-    ticker = fcoin.get_market_ticker("ftusdt")
-    lastPrice = ticker["data"]["ticker"][0]
+    lastPrice = getLastPrice()
     print("lastPrice -> ", lastPrice)
 
     buy_price = lastPrice
@@ -127,8 +148,15 @@ def dealOrder():
     else:
         print('ft engough')
 
-    fcoin.sell('ftusdt',buy_price, Amount)
-    fcoin.buy('ftusdt', buy_price, Amount)
+    sell_vars = [0, buy_price, Amount]
+    buy_vars  = [1, buy_price, Amount]
+    func_var = [(sell_vars, None), (buy_vars, None)]
+     
+    requests = threadpool.makeRequests(exchage, func_var)
+    [pool.putRequest(req) for req in requests]
+    pool.wait()
+    #fcoin.sell('ftusdt',buy_price, Amount)
+    #fcoin.buy('ftusdt', buy_price, Amount)
 
     cnt = 0
     while True:
@@ -141,11 +169,11 @@ def dealOrder():
             continue
 
         if pendingNum <= 0:
-            print('all dealed !')
+            print('>>>>>>>>> all dealed ! <<<<<<<<')
             break
         else :
             cnt += 1
-            print("pending times -> ", cnt)
+            print("pending......")
             if cnt > 10 :
                 print('time out, break to next!')
                 break
@@ -153,6 +181,9 @@ def dealOrder():
 
 if __name__ == "__main__":
     while True:
+        print('===============deal order begin ============')
         dealOrder()
+        print('===============deal order end   ============')
         time.sleep(2)
+
         sys.stdout.flush()
